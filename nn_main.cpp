@@ -19,6 +19,8 @@ struct neuron {
 	
 	vector<connection*> input_connections;
 	vector<connection*> output_connections;
+
+	double const_weight;
 };
 
 struct connection {
@@ -73,6 +75,7 @@ neuron_net net_alloc_classic(int layers, int layer_heights[]) {
 			//net[index].output_connections_count = 0;
 
 			net[index].value = (double)rand() / RAND_MAX - 0.5;
+			net[index].const_weight = (double)rand() / RAND_MAX - 0.5;
 			net[index].error = 0;
 
 			net[index].value_is_expected = false;
@@ -121,7 +124,7 @@ neuron_net net_alloc_classic(int layers, int layer_heights[]) {
 // Calculates a forward step for a single neuron
 void net_neuron_calc_new_value_step(neuron* neuron) {
     if (neuron->input_connections.size() > 0) {
-        double weighted_sum = 0;
+        double weighted_sum = neuron->const_weight * 1.0;
         for (size_t i = 0; i < neuron->input_connections.size(); i++) {
             weighted_sum += neuron->input_connections[i]->weight * neuron->input_connections[i]->left->value;
         }
@@ -147,6 +150,9 @@ void net_neuron_calc_error_step(neuron* neuron) {
 // Calculates single neuron weights
 void net_neuron_calc_new_weights_step(neuron* neuron) {
 	double alpha = 0.001;
+
+	neuron->const_weight = neuron->const_weight + alpha * neuron->error * 1.0;
+
 	for (size_t i = 0; i < neuron->input_connections.size(); i++) {
 		neuron->input_connections[i]->weight =
 				neuron->input_connections[i]->weight +
