@@ -2,22 +2,23 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <vector>
+
+using namespace std;
+
 int width, height;
 
 struct connection;
 
 struct neuron {
     double value;
-
 	double error;
 
 	bool value_is_expected;
 	double expected_value;
 	
-	connection** input_connections;
-	int input_connections_count;
-	connection** output_connections;
-	int output_connections_count;
+	vector<connection*> input_connections;
+	vector<connection*> output_connections;
 };
 
 struct connection {
@@ -62,14 +63,14 @@ neuron_net net_alloc_classic(int layers, int layer_heights[]) {
         layer_index_starts[k + 1] = count;
 	}
 	
-	neuron* net = (neuron*) malloc(sizeof(neuron) * count);
+	neuron* net = new neuron[count];
     
 	for (int l = 0; l < layers; l++) {
 		for (int i = 0; i < layer_heights[l]; i++) {
             int index = layer_index_starts[l] + i;
 			
-			net[index].input_connections_count = 0;
-			net[index].output_connections_count = 0;
+			//net[index].input_connections_count = 0;
+			//net[index].output_connections_count = 0;
 
 			net[index].value = (double)rand() / RAND_MAX - 0.5;
 			net[index].error = 0;
@@ -78,29 +79,27 @@ neuron_net net_alloc_classic(int layers, int layer_heights[]) {
 			net[index].expected_value = 0;
 			
 			if (l > 0) {
-				net[index].input_connections = (connection**) malloc(sizeof(connection*) * layer_heights[l - 1]);
+				net[index].input_connections.reserve(layer_heights[l - 1]);
 				
 				for (int j = 0; j < layer_heights[l - 1]; j++) {
                     int index_prev = layer_index_starts[l - 1] + j;
 
-					connection* con = (connection*) malloc(sizeof(connection));
+					connection* con = new connection();
 				
 					con->left = &net[index_prev];
 					con->right = &net[index];
 					con->weight = (double)rand() / RAND_MAX - 0.5;
 				
-					net[index].input_connections[net[index].input_connections_count++] = con;
-					net[index_prev].output_connections[net[index_prev].output_connections_count++] = con;
+					net[index].input_connections.push_back(con); // [net[index].input_connections_count++] = con;
+					net[index_prev].output_connections.push_back(con); // [net[index_prev].output_connections_count++] = con;
 				}
                 
-			} else {
-				net[index].input_connections = NULL;
 			}
 			
-			if (l < layers - 1) { 
-				net[index].output_connections = (connection**) malloc(sizeof(connection*) * layer_heights[l + 1]);
+			if (l < layers - 1) {
+				net[index].output_connections.reserve(layer_heights[l + 1]);
 			} else {
-				net[index].output_connections = (connection**) malloc(sizeof(connection*));
+				net[index].output_connections.reserve(1);
 			}
 						
 			index ++;
@@ -109,7 +108,7 @@ neuron_net net_alloc_classic(int layers, int layer_heights[]) {
     
 	neuron_net res;
     res.layers = layers;
-    res.layer_heights = (int*)malloc(sizeof(int) * layers);
+    res.layer_heights = new int[layers];
     for (int l = 0; l < layers; l++) {
         res.layer_heights[l] = layer_heights[l];
     }
@@ -121,9 +120,9 @@ neuron_net net_alloc_classic(int layers, int layer_heights[]) {
 
 // Calculates a forward step for a single neuron
 void net_neuron_calc_new_value_step(neuron* neuron) {
-    if (neuron->input_connections_count > 0) {
+    if (neuron->input_connections.size() > 0) {
         double weighted_sum = 0;
-        for (int i = 0; i < neuron->input_connections_count; i++) {
+        for (size_t i = 0; i < neuron->input_connections.size(); i++) {
             weighted_sum += neuron->input_connections[i]->weight * neuron->input_connections[i]->left->value;
         }
         neuron->value = sigmoid(weighted_sum);
@@ -137,7 +136,7 @@ void net_neuron_calc_error_step(neuron* neuron) {
 		weighted_sum = neuron->expected_value - neuron->value;
 	} else {
         weighted_sum = 0;
-        for (int i = 0; i < neuron->output_connections_count; i++) {
+        for (size_t i = 0; i < neuron->output_connections.size(); i++) {
             weighted_sum += neuron->output_connections[i]->weight * neuron->output_connections[i]->right->error;
         }
 	}
@@ -148,7 +147,7 @@ void net_neuron_calc_error_step(neuron* neuron) {
 // Calculates single neuron weights
 void net_neuron_calc_new_weights_step(neuron* neuron) {
 	double alpha = 0.001;
-	for (int i = 0; i < neuron->input_connections_count; i++) {
+	for (size_t i = 0; i < neuron->input_connections.size(); i++) {
 		neuron->input_connections[i]->weight =
 				neuron->input_connections[i]->weight +
 				alpha * neuron->error * neuron->input_connections[i]->left->value;
@@ -189,6 +188,7 @@ void print(neuron_net nn) {
 
 int main(int argc, char** argv) {
 	int layer_heights[] = { 2, 2, 1 };
+
 	neuron_net nn = net_alloc_classic(3, layer_heights);
     
     for (int i = 0; i < nn.count; i++) {
