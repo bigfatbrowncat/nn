@@ -169,7 +169,7 @@ void net_neuron_update_weights_step(neuron* neuron) {
 
 // Calculates single neuron weights
 void net_neuron_calc_new_weights_step(neuron* neuron) {
-	double alpha = 0.005;
+	double alpha = 0.001;
 	for (int i = 0; i < neuron->input_connections_count; i++) {
 		neuron->input_connections[i]->weight_new =
 				neuron->input_connections[i]->weight +
@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
 		nn.neurons[1].value = inputB[s % 4];
 		//nn.neurons[3].value = 1;
 		nn.neurons[last].expected_value = expectedOut[s % 4];
-		for (int k = 0; k < 30; k++) {
+		for (int k = 0; k < 5; k++) {
 			net_calc_value_step(nn);
 			net_calc_error_step(nn);
 		}
