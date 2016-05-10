@@ -8,10 +8,8 @@ struct connection;
 
 struct neuron {
     double value;
-	double value_new;
 
 	double error;
-	double error_new;
 
 	bool value_is_expected;
 	double expected_value;
@@ -26,7 +24,6 @@ struct connection {
 	neuron* left;
 	neuron* right;
 	double weight;
-	double weight_new;
 };
 
 struct neuron_net {
@@ -129,15 +126,8 @@ void net_neuron_calc_new_value_step(neuron* neuron) {
         for (int i = 0; i < neuron->input_connections_count; i++) {
             weighted_sum += neuron->input_connections[i]->weight * neuron->input_connections[i]->left->value;
         }
-        neuron->value_new = sigmoid(weighted_sum);
-    } else {
-        neuron->value_new = neuron->value;
+        neuron->value = sigmoid(weighted_sum);
     }
-}
-
-// Updates single neuron value
-void net_neuron_update_value_step(neuron* neuron) {
-    neuron->value = neuron->value_new;
 }
 
 // Calculates a backward step for a single neuron
@@ -152,26 +142,14 @@ void net_neuron_calc_error_step(neuron* neuron) {
         }
 	}
 	
-	neuron->error_new = sigmoid_diff(neuron->value) * weighted_sum;
-}
-
-// Updates single neuron error
-void net_neuron_update_error_step(neuron* neuron) {
-	neuron->error = neuron->error_new;
-}
-
-// Updates single neuron input weights
-void net_neuron_update_weights_step(neuron* neuron) {
-	for (int i = 0; i < neuron->input_connections_count; i++) {
-		neuron->input_connections[i]->weight = neuron->input_connections[i]->weight_new;
-	}
+	neuron->error = sigmoid_diff(neuron->value) * weighted_sum;
 }
 
 // Calculates single neuron weights
 void net_neuron_calc_new_weights_step(neuron* neuron) {
 	double alpha = 0.001;
 	for (int i = 0; i < neuron->input_connections_count; i++) {
-		neuron->input_connections[i]->weight_new =
+		neuron->input_connections[i]->weight =
 				neuron->input_connections[i]->weight +
 				alpha * neuron->error * neuron->input_connections[i]->left->value;
 	}
@@ -181,19 +159,16 @@ void net_neuron_calc_new_weights_step(neuron* neuron) {
 void net_calc_value_step(neuron_net net) {
 	for (int k = 0; k < net.count; k++) {
 		net_neuron_calc_new_value_step(&net.neurons[k]);
-        net_neuron_update_value_step(&net.neurons[k]);
     }
 }
 
 void net_calc_error_step(neuron_net net) {
 	for (int k = 0; k < net.count; k++) {
 		net_neuron_calc_error_step(&net.neurons[k]);
-		net_neuron_update_error_step(&net.neurons[k]);
 	}
 
 	for (int k = 0; k < net.count; k++) {
 		net_neuron_calc_new_weights_step(&net.neurons[k]);
-		net_neuron_update_weights_step(&net.neurons[k]);
 	}
 }
 
