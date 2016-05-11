@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <math.h>
+#include <cmath>
 #include <stdlib.h>
 
 #include <vector>
@@ -12,6 +12,8 @@ struct connection;
 
 struct neuron {
     double value;
+    double value_new;
+
 	double error;
 
 	bool value_is_expected;
@@ -149,7 +151,7 @@ void net_neuron_calc_error_step(neuron* neuron) {
 
 // Calculates single neuron weights
 void net_neuron_calc_new_weights_step(neuron* neuron) {
-	double alpha = 0.001;
+	double alpha = 0.0001;
 
 	neuron->const_weight = neuron->const_weight + alpha * neuron->error * 1.0;
 
@@ -162,7 +164,7 @@ void net_neuron_calc_new_weights_step(neuron* neuron) {
 
 // Calculates a value for the whole net
 void net_calc_value_step(neuron_net net) {
-	for (int k = 0; k < net.count; k++) {
+	for (int k = net.count - 1; k >= 0; k--) {
 		net_neuron_calc_new_value_step(&net.neurons[k]);
     }
 }
@@ -172,7 +174,7 @@ void net_calc_error_step(neuron_net net) {
 		net_neuron_calc_error_step(&net.neurons[k]);
 	}
 
-	for (int k = 0; k < net.count; k++) {
+	for (int k = net.count - 1; k >= 0; k--) {
 		net_neuron_calc_new_weights_step(&net.neurons[k]);
 	}
 }
@@ -192,7 +194,9 @@ void print(neuron_net nn) {
 	printf("\n");
 }
 
-int main(int argc, char** argv) {
+void test_xor() {
+
+	// Topology
 	int layer_heights[] = { 2, 2, 1 };
 
 	neuron_net nn = net_alloc_classic(3, layer_heights);
@@ -201,29 +205,38 @@ int main(int argc, char** argv) {
         //nn.neurons[i].value = 0;
     	nn.neurons[i].value_is_expected = false;
     }
-    
-	
-	// NOT B
-	int inputA[] =      { 0, 0, 1, 1 };
-	int inputB[] =      { 0, 1, 0, 1 };
-	int expectedOut[] = { 0, 1, 1, 0 };
-
-	print(nn);
 
 	int last = nn.count - 1;
 	nn.neurons[last].value_is_expected = true;
 
+	// Learning
+	int inputA[] =      { 0, 0, 1, 1 };
+	int inputB[] =      { 0, 1, 0, 1 };
+	int expectedOut[] = { 0, 1, 1, 0 };
 
 	for (int s = 0; s < 300000; s++) {
 		nn.neurons[0].value = inputA[s % 4];
 		nn.neurons[1].value = inputB[s % 4];
-		//nn.neurons[3].value = 1;
 		nn.neurons[last].expected_value = expectedOut[s % 4];
-		for (int k = 0; k < 5; k++) {
+		for (int k = 0; k < 15; k++) {
 			net_calc_value_step(nn);
 			net_calc_error_step(nn);
 		}
 	}
-	print(nn);
 
+	// Testing
+	double delta = 0;
+	for (int i = 0; i < 4; i ++) {
+		nn.neurons[0].value = inputA[i];
+		nn.neurons[1].value = inputB[i];
+		for (int s = 0; s < nn.layers; s++) { net_calc_value_step(nn); }
+
+		delta += abs(nn.neurons[last].value - expectedOut[i]);
+	}
+	printf("test_xor delta %f\n", delta);
+}
+
+int main(int argc, char** argv) {
+
+	test_xor();
 }
