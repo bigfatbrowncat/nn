@@ -11,14 +11,14 @@ int width, height;
 struct connection;
 
 struct neuron {
-    double value;
-    double value_new;
+	double value;
+	double value_new;
 
 	double error;
 
 	bool value_is_expected;
 	double expected_value;
-	
+
 	vector<connection*> input_connections;
 	vector<connection*> output_connections;
 
@@ -32,14 +32,81 @@ struct connection {
 };
 
 struct neuron_net {
-	neuron* neurons;
-	int count;
-    
-    neuron* input_neurons;
-    int input_count;
+	vector<neuron*> neurons;
+	vector<connection*> connections;
 
-    int* layer_heights;
-    int layers;
+	vector<int> layer_heights;
+	vector<vector<neuron>::size_type> layer_starts;
+	int layers;
+
+	// Allocates classic Rosenblatt perceptron
+	static neuron_net* alloc_classic(int layers, const vector<int>& layer_heights) {
+
+		neuron_net* pres = new neuron_net();
+
+		neuron_net& res = *pres;
+		res.layers = layers;
+		res.layer_heights = layer_heights;
+
+		for (int l = 0; l < layers; l++) {
+
+			vector<neuron>::size_type layer_start = res.neurons.size();
+			res.layer_starts.push_back(layer_start);
+
+			for (int i = 0; i < layer_heights[l]; i++) {
+
+				res.neurons.push_back(new neuron());
+				neuron* index = res.neurons.back();
+				neuron& n = *index;
+
+				n.value = (double) rand() / RAND_MAX - 0.5;
+				n.const_weight = (double) rand() / RAND_MAX - 0.5;
+				n.error = 0;
+
+				n.value_is_expected = false;
+				n.expected_value = 0;
+
+				if (l > 0) {
+					n.input_connections.reserve(layer_heights[l - 1]);
+
+					vector<neuron>::size_type prev_layer_start =
+							*(res.layer_starts.end() - 2);
+
+					for (int j = 0; j < layer_heights[l - 1]; j++) {
+						neuron* index_prev = res.neurons[prev_layer_start + j];
+
+						res.connections.push_back(new connection());
+						connection* con_index = res.connections.back();
+						connection& con = *con_index;
+
+						con.left = index_prev;
+						con.right = index;
+						con.weight = (double) rand() / RAND_MAX - 0.5;
+
+						n.input_connections.push_back(con_index);
+						index_prev->output_connections.push_back(con_index);
+					}
+
+				}
+
+				if (l < layers - 1) {
+					n.output_connections.reserve(layer_heights[l + 1]);
+				} else {
+					n.output_connections.reserve(1);
+				}
+
+			}
+		}
+
+		return pres;
+	}
+protected:
+	neuron_net() {
+	}
+
+private:
+	neuron_net& operator =(const neuron_net& other);
+	neuron_net(const neuron_net& other);
 };
 
 // s = 2 / (1+e^(-2x)) - 1
@@ -50,88 +117,19 @@ double sigmoid(double x) {
 // s' = (1 + s)(1 - s)
 double sigmoid_diff(double x) {
 	double s = sigmoid(x);
-	return 1.0 - s*s;
-}
-
-// Allocates classic Rosenblatt perceptron
-neuron_net net_alloc_classic(int layers, int layer_heights[]) {
-	
-	// Allocating memory
-	// Calculating neurons count
-	int count = 0;
-    int layer_index_starts[layers + 1];
-    layer_index_starts[0] = 0;
-    
-	for (int k = 0; k < layers; k++) {
-		count += layer_heights[k];
-        layer_index_starts[k + 1] = count;
-	}
-	
-	neuron* net = new neuron[count];
-    
-	for (int l = 0; l < layers; l++) {
-		for (int i = 0; i < layer_heights[l]; i++) {
-            int index = layer_index_starts[l] + i;
-			
-			//net[index].input_connections_count = 0;
-			//net[index].output_connections_count = 0;
-
-			net[index].value = (double)rand() / RAND_MAX - 0.5;
-			net[index].const_weight = (double)rand() / RAND_MAX - 0.5;
-			net[index].error = 0;
-
-			net[index].value_is_expected = false;
-			net[index].expected_value = 0;
-			
-			if (l > 0) {
-				net[index].input_connections.reserve(layer_heights[l - 1]);
-				
-				for (int j = 0; j < layer_heights[l - 1]; j++) {
-                    int index_prev = layer_index_starts[l - 1] + j;
-
-					connection* con = new connection();
-				
-					con->left = &net[index_prev];
-					con->right = &net[index];
-					con->weight = (double)rand() / RAND_MAX - 0.5;
-				
-					net[index].input_connections.push_back(con); // [net[index].input_connections_count++] = con;
-					net[index_prev].output_connections.push_back(con); // [net[index_prev].output_connections_count++] = con;
-				}
-                
-			}
-			
-			if (l < layers - 1) {
-				net[index].output_connections.reserve(layer_heights[l + 1]);
-			} else {
-				net[index].output_connections.reserve(1);
-			}
-						
-			index ++;
-		}
-	}
-    
-	neuron_net res;
-    res.layers = layers;
-    res.layer_heights = new int[layers];
-    for (int l = 0; l < layers; l++) {
-        res.layer_heights[l] = layer_heights[l];
-    }
-	res.neurons = net;
-	res.count = count;
-	
-	return res;
+	return 1.0 - s * s;
 }
 
 // Calculates a forward step for a single neuron
 void net_neuron_calc_new_value_step(neuron* neuron) {
-    if (neuron->input_connections.size() > 0) {
-        double weighted_sum = neuron->const_weight * 1.0;
-        for (size_t i = 0; i < neuron->input_connections.size(); i++) {
-            weighted_sum += neuron->input_connections[i]->weight * neuron->input_connections[i]->left->value;
-        }
-        neuron->value = sigmoid(weighted_sum);
-    }
+	if (neuron->input_connections.size() > 0) {
+		double weighted_sum = neuron->const_weight * 1.0;
+		for (size_t i = 0; i < neuron->input_connections.size(); i++) {
+			weighted_sum += neuron->input_connections[i]->weight
+					* neuron->input_connections[i]->left->value;
+		}
+		neuron->value = sigmoid(weighted_sum);
+	}
 }
 
 // Calculates a backward step for a single neuron
@@ -140,12 +138,13 @@ void net_neuron_calc_error_step(neuron* neuron) {
 	if (neuron->value_is_expected) {
 		weighted_sum = neuron->expected_value - neuron->value;
 	} else {
-        weighted_sum = 0;
-        for (size_t i = 0; i < neuron->output_connections.size(); i++) {
-            weighted_sum += neuron->output_connections[i]->weight * neuron->output_connections[i]->right->error;
-        }
+		weighted_sum = 0;
+		for (size_t i = 0; i < neuron->output_connections.size(); i++) {
+			weighted_sum += neuron->output_connections[i]->weight
+					* neuron->output_connections[i]->right->error;
+		}
 	}
-	
+
 	neuron->error = sigmoid_diff(neuron->value) * weighted_sum;
 }
 
@@ -157,67 +156,52 @@ void net_neuron_calc_new_weights_step(neuron* neuron) {
 
 	for (size_t i = 0; i < neuron->input_connections.size(); i++) {
 		neuron->input_connections[i]->weight =
-				neuron->input_connections[i]->weight +
-				alpha * neuron->error * neuron->input_connections[i]->left->value;
+				neuron->input_connections[i]->weight
+						+ alpha * neuron->error
+								* neuron->input_connections[i]->left->value;
 	}
 }
 
 // Calculates a value for the whole net
-void net_calc_value_step(neuron_net net) {
-	for (int k = net.count - 1; k >= 0; k--) {
-		net_neuron_calc_new_value_step(&net.neurons[k]);
-    }
-}
-
-void net_calc_error_step(neuron_net net) {
-	for (int k = 0; k < net.count; k++) {
-		net_neuron_calc_error_step(&net.neurons[k]);
-	}
-
-	for (int k = net.count - 1; k >= 0; k--) {
-		net_neuron_calc_new_weights_step(&net.neurons[k]);
+void net_calc_value_step(neuron_net* net) {
+	for (int k = net->neurons.size() - 1; k >= 0; k--) {
+		net_neuron_calc_new_value_step(net->neurons[k]);
 	}
 }
 
-void print(neuron_net nn) {
-	for (int i = 0; i < 2; i++) {
-		for (int j = 0; j < 2; j++) {
-			nn.neurons[0].value = i;
-			nn.neurons[1].value = j;
-
-			// Calculating the net
-			for (int s = 0; s < nn.layers; s++) { net_calc_value_step(nn); }
-
-			printf("%d xor %d = %lf\n", i, j, nn.neurons[nn.count - 1].value);
-		}
+void net_calc_error_step(neuron_net* net) {
+	for (unsigned int k = 0; k < net->neurons.size(); k++) {
+		net_neuron_calc_error_step(net->neurons[k]);
 	}
-	printf("\n");
+
+	for (int k = net->neurons.size() - 1; k >= 0; k--) {
+		net_neuron_calc_new_weights_step(net->neurons[k]);
+	}
 }
 
 void test_xor() {
 
 	// Topology
-	int layer_heights[] = { 2, 2, 1 };
+	vector<int> layer_heights = { 2, 2, 1 };
 
-	neuron_net nn = net_alloc_classic(3, layer_heights);
-    
-    for (int i = 0; i < nn.count; i++) {
-        //nn.neurons[i].value = 0;
-    	nn.neurons[i].value_is_expected = false;
-    }
+	neuron_net* nn = neuron_net::alloc_classic(3, layer_heights);
 
-	int last = nn.count - 1;
-	nn.neurons[last].value_is_expected = true;
+	for (unsigned int i = 0; i < nn->neurons.size(); i++) {
+		nn->neurons[i]->value_is_expected = false;
+	}
+
+	int last = nn->neurons.size() - 1;
+	nn->neurons[last]->value_is_expected = true;
 
 	// Learning
-	int inputA[] =      { 0, 0, 1, 1 };
-	int inputB[] =      { 0, 1, 0, 1 };
+	int inputA[] = { 0, 0, 1, 1 };
+	int inputB[] = { 0, 1, 0, 1 };
 	int expectedOut[] = { 0, 1, 1, 0 };
 
 	for (int s = 0; s < 300000; s++) {
-		nn.neurons[0].value = inputA[s % 4];
-		nn.neurons[1].value = inputB[s % 4];
-		nn.neurons[last].expected_value = expectedOut[s % 4];
+		nn->neurons[0]->value = inputA[s % 4];
+		nn->neurons[1]->value = inputB[s % 4];
+		nn->neurons[last]->expected_value = expectedOut[s % 4];
 		for (int k = 0; k < 15; k++) {
 			net_calc_value_step(nn);
 			net_calc_error_step(nn);
@@ -226,17 +210,23 @@ void test_xor() {
 
 	// Testing
 	double delta = 0;
-	for (int i = 0; i < 4; i ++) {
-		nn.neurons[0].value = inputA[i];
-		nn.neurons[1].value = inputB[i];
-		for (int s = 0; s < nn.layers; s++) { net_calc_value_step(nn); }
+	for (int i = 0; i < 4; i++) {
+		nn->neurons[0]->value = inputA[i];
+		nn->neurons[1]->value = inputB[i];
+		for (int s = 0; s < nn->layers; s++) {
+			net_calc_value_step(nn);
+		}
 
-		delta += abs(nn.neurons[last].value - expectedOut[i]);
+		delta += abs(nn->neurons[last]->value - expectedOut[i]);
 	}
 	printf("test_xor delta %f\n", delta);
+
+	delete nn;
 }
 
 int main(int argc, char** argv) {
 
 	test_xor();
+
+	return 0;
 }
